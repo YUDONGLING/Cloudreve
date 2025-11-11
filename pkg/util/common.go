@@ -3,12 +3,16 @@ package util
 import (
 	"context"
 	"fmt"
-	"github.com/gin-gonic/gin"
+	"path/filepath"
+	"strconv"
 	"math/rand"
 	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gofrs/uuid"
 )
 
 func init() {
@@ -93,6 +97,80 @@ func Replace(table map[string]string, s string) string {
 		s = strings.Replace(s, key, value, -1)
 	}
 	return s
+}
+
+// DynamicReplace 动态替换字符串中的变量
+func DynamicReplace(regPattern string, fsSeparator string, rule string, pathAvailable bool, thumbAvailable bool,
+	                currentTime time.Time, userId int, originName string, originPath string, blobPath string) string {
+	re := regexp.MustCompile(regPattern)
+	return re.ReplaceAllStringFunc(rule, func(match string) string {
+		switch match {
+		case "{randomkey16}":
+			return RandStringRunes(16)
+		case "{randomkey8}":
+			return RandStringRunes(8)
+		case "{timestamp}":
+			return strconv.FormatInt(currentTime.Unix(), 10)
+		case "{timestamp_nano}":
+			return strconv.FormatInt(currentTime.UnixNano(), 10)
+		case "{randomnum2}":
+			return strconv.Itoa(rand.Intn(2))
+		case "{randomnum3}":
+			return strconv.Itoa(rand.Intn(3))
+		case "{randomnum4}":
+			return strconv.Itoa(rand.Intn(4))
+		case "{randomnum8}":
+			return strconv.Itoa(rand.Intn(8))
+		case "{uid}":
+			return strconv.Itoa(userId)
+		case "{datetime}":
+			return currentTime.Format("20060102150405")
+		case "{date}":
+			return currentTime.Format("20060102")
+		case "{year}":
+			return currentTime.Format("2006")
+		case "{month}":
+			return currentTime.Format("01")
+		case "{day}":
+			return currentTime.Format("02")
+		case "{hour}":
+			return currentTime.Format("15")
+		case "{minute}":
+			return currentTime.Format("04")
+		case "{second}":
+			return currentTime.Format("05")
+		case "{originname}":
+			return originName
+		case "{originname_without_ext}":
+			return strings.TrimSuffix(originName, filepath.Ext(originName))
+		case "{ext}":
+			return filepath.Ext(originName)
+		case "{uuid}":
+			return uuid.Must(uuid.NewV4()).String()
+		case "{path}":
+			if pathAvailable {
+				return originPath + fsSeparator
+			}
+			return match
+		case "{blob_path}":
+			if thumbAvailable {
+				return filepath.Dir(blobPath) + fsSeparator
+			}
+			return match
+		case "{blob_name}":
+			if thumbAvailable {
+				return filepath.Base(blobPath)
+			}
+			return match
+		case "{blob_name_without_ext}":
+			if thumbAvailable {
+				return strings.TrimSuffix(filepath.Base(blobPath), filepath.Ext(blobPath))
+			}
+			return match
+		default:
+			return match
+		}
+	})
 }
 
 // BuildRegexp 构建用于SQL查询用的多条件正则
