@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -99,6 +100,43 @@ func (m *manager) CreateUploadSession(ctx context.Context, req *fs.UploadRequest
 		if err != nil {
 			m.OnUploadFailed(ctx, uploadSession)
 			return nil, err
+		}
+
+		// Apply upload proxy to all upload URLs if configured
+		if len(credential.UploadURLs) > 0 {
+			proxiedURLs := make([]string, 0, len(credential.UploadURLs))
+			for _, uploadURL := range credential.UploadURLs {
+				parsedURL, err := url.Parse(uploadURL)
+				if err != nil {
+					m.OnUploadFailed(ctx, uploadSession)
+					return nil, fmt.Errorf("failed to parse upload URL %q: %w", uploadURL, err)
+				}
+
+				proxiedURL, err := driver.ApplyUploadProxyIfNeeded(uploadSession.Policy, parsedURL)
+				if err != nil {
+					m.OnUploadFailed(ctx, uploadSession)
+					return nil, fmt.Errorf("failed to apply upload proxy to URL %q: %w", uploadURL, err)
+				}
+
+				proxiedURLs = append(proxiedURLs, proxiedURL.String())
+			}
+			credential.UploadURLs = proxiedURLs
+		}
+
+		// Apply upload proxy to complete URL if configured
+		if credential.CompleteURL != "" {
+			parsedURL, err := url.Parse(credential.CompleteURL)
+			if err != nil {
+				m.OnUploadFailed(ctx, uploadSession)
+				return nil, fmt.Errorf("failed to parse complete URL %q: %w", credential.CompleteURL, err)
+			}
+
+			proxiedURL, err := driver.ApplyUploadProxyIfNeeded(uploadSession.Policy, parsedURL)
+			if err != nil {
+				m.OnUploadFailed(ctx, uploadSession)
+				return nil, fmt.Errorf("failed to apply upload proxy to complete URL %q: %w", credential.CompleteURL, err)
+			}
+			credential.CompleteURL = proxiedURL.String()
 		}
 	} else {
 		// For relayed upload, we don't need to create credential

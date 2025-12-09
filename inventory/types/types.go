@@ -56,8 +56,16 @@ type (
 		CustomProxy bool `json:"custom_proxy,omitempty"`
 		// ProxyServer 反代地址
 		ProxyServer string `json:"proxy_server,omitempty"`
+		// PathReplacements path replacement rules for download URLs.
+		PathReplacements []PathReplacement `json:"path_replacements,omitempty"`
 		// InternalProxy whether to use Cloudreve internal proxy to get file content
 		InternalProxy bool `json:"internal_proxy,omitempty"`
+		// UploadCustomProxy whether to use custom-proxy for upload traffic
+		UploadCustomProxy bool `json:"upload_custom_proxy,omitempty"`
+		// UploadProxyServer upload proxy address
+		UploadProxyServer string `json:"upload_proxy_server,omitempty"`
+		// UploadPathReplacements path replacement rules for upload URLs.
+		UploadPathReplacements []PathReplacement `json:"upload_path_replacements,omitempty"`
 		// OdDriver OneDrive 驱动器定位符
 		OdDriver string `json:"od_driver,omitempty"`
 		// Region 区域代码
@@ -105,6 +113,11 @@ type (
 		ChunkConcurrency int `json:"chunk_concurrency,omitempty"`
 		// Whether to enable file encryption.
 		Encryption bool `json:"encryption,omitempty"`
+	}
+
+	PathReplacement struct {
+		From string `json:"from"`
+		To   string `json:"to"`
 	}
 
 	FileType         int
