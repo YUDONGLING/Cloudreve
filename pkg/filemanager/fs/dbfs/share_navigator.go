@@ -202,8 +202,29 @@ func (n *shareNavigator) To(ctx context.Context, path *fs.URI) (*File, error) {
 
 		n.share = share
 		n.owner = share.Edges.User
+
+		// Root() is skipped when using restored state, so re-check requester permissions
+		// to ensure group permission changes take effect immediately.
+		if n.user.ID != n.owner.ID && !n.user.Edges.Group.Permissions.Enabled(int(types.GroupPermissionShareDownload)) {
+			if inventory.IsAnonymousUser(n.user) {
+				return nil, serializer.NewError(
+					serializer.CodeAnonymouseAccessDenied,
+					fmt.Sprintf("You don't have permission to access share links"),
+					nil,
+				)
+			}
+
+			return nil, serializer.NewError(
+				serializer.CodeNoPermissionErr,
+				fmt.Sprintf("You don't have permission to access share links"),
+				nil,
+			)
+		}
+
 		if n.shareRoot != nil {
 			n.shareRoot.OwnerModel = n.owner
+			n.shareRoot.disableView = (share.Props == nil || !share.Props.ShareView) && n.user.ID != n.owner.ID
+			n.shareRoot.CapabilitiesBs = n.Capabilities(false).Capability
 		}
 		if n.ownerRoot != nil {
 			n.ownerRoot.OwnerModel = n.owner
