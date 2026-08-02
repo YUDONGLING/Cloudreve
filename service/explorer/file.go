@@ -678,7 +678,7 @@ func RedirectDirectLink(c *gin.Context, name string, download bool) error {
 
 	// Request entity URL
 	expire := time.Now().Add(settings.EntityUrlValidDuration(c))
-	res, earliestExpire, err := m.GetUrlForRedirectedDirectLink(c, dl,
+	res, _, err := m.GetUrlForRedirectedDirectLink(c, dl,
 		fs.WithUrlExpire(&expire),
 		fs.WithIsDownload(download),
 	)
@@ -686,8 +686,8 @@ func RedirectDirectLink(c *gin.Context, name string, download bool) error {
 		return err
 	}
 
+	c.Header("Cache-Control", "no-store")
 	c.Redirect(http.StatusFound, res)
-	c.Header("Cache-Control", fmt.Sprintf("public, max-age=%d", int(earliestExpire.Sub(time.Now()).Seconds())))
 	return nil
 }
 

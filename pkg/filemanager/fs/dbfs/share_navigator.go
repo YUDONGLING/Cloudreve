@@ -57,6 +57,7 @@ type (
 		share           *ent.Share
 		owner           *ent.User
 		disableRecycle  bool
+		restoredState   bool
 		persist         func()
 	}
 
@@ -90,6 +91,7 @@ func (n *shareNavigator) RestoreState(s State) error {
 		n.singleFileShare = state.SingleFileShare
 		n.share = state.Share
 		n.owner = state.Owner
+		n.restoredState = true
 		return nil
 	}
 
@@ -179,6 +181,36 @@ func (n *shareNavigator) Root(ctx context.Context, path *fs.URI) (*File, error) 
 }
 
 func (n *shareNavigator) To(ctx context.Context, path *fs.URI) (*File, error) {
+	// Navigator state contains the share owner's status and group. Revalidate it
+	// after a cache restore so a ban or group permission change takes effect
+	// immediately instead of being bypassed for ContextHintTTL.
+	if n.restoredState {
+		shareCtx := context.WithValue(ctx, inventory.LoadShareUser{}, true)
+		shareCtx = context.WithValue(shareCtx, inventory.LoadShareFile{}, true)
+		share, err := n.shareClient.GetByHashID(shareCtx, path.ID(hashid.EncodeUserID(n.hasher, n.user.ID)))
+		if err != nil {
+			return nil, ErrShareNotFound.WithError(err)
+		}
+
+		if err := inventory.IsValidShare(share); err != nil {
+			return nil, ErrShareNotFound.WithError(err)
+		}
+
+		if share.Password != "" && share.Password != path.Password() {
+			return nil, ErrShareIncorrectPassword
+		}
+
+		n.share = share
+		n.owner = share.Edges.User
+		if n.shareRoot != nil {
+			n.shareRoot.OwnerModel = n.owner
+		}
+		if n.ownerRoot != nil {
+			n.ownerRoot.OwnerModel = n.owner
+		}
+		n.restoredState = false
+	}
+
 	if n.shareRoot == nil {
 		root, err := n.Root(ctx, path)
 		if err != nil {

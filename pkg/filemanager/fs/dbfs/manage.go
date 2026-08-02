@@ -643,6 +643,17 @@ func (f *DBFS) GetFileFromDirectLink(ctx context.Context, dl *ent.DirectLink) (f
 		return nil, fs.ErrDirectLinkInvalid.WithError(fmt.Errorf("file owner is not active"))
 	}
 
+	// Revalidate the owner's current direct-link permission so existing links
+	// are revoked when direct links are disabled for the current group, whether
+	// by changing the group setting or moving the owner to another group.
+	group, err := owner.Edges.GroupOrErr()
+	if err != nil {
+		return nil, fs.ErrDirectLinkInvalid.WithError(fmt.Errorf("file owner group is unavailable: %w", err))
+	}
+	if group.Settings == nil || group.Settings.SourceBatchSize <= 0 {
+		return nil, fs.ErrDirectLinkInvalid.WithError(fmt.Errorf("file owner is not allowed to create direct links"))
+	}
+
 	file := newFile(nil, fileModel)
 
 	// Traverse to the root file

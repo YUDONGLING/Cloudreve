@@ -24,9 +24,10 @@ type (
 )
 
 var (
-	ErrShareLinkExpired  = fmt.Errorf("share link expired")
-	ErrOwnerInactive     = fmt.Errorf("owner is inactive")
-	ErrSourceFileInvalid = fmt.Errorf("source file is deleted")
+	ErrShareLinkExpired   = fmt.Errorf("share link expired")
+	ErrOwnerInactive      = fmt.Errorf("owner is inactive")
+	ErrOwnerShareDisabled = fmt.Errorf("owner is not allowed to share files")
+	ErrSourceFileInvalid  = fmt.Errorf("source file is deleted")
 )
 
 type (
@@ -229,6 +230,15 @@ func IsValidShare(share *ent.Share) error {
 		return ErrOwnerInactive
 	}
 
+	// Creating and accessing share links are governed by the owner's current
+	// group. This makes existing links unavailable as soon as the permission is
+	// revoked, instead of only preventing the creation of new links.
+	ownerGroup, err := owner.Edges.GroupOrErr()
+	if err != nil || ownerGroup.Permissions == nil ||
+		!ownerGroup.Permissions.Enabled(int(types.GroupPermissionShare)) {
+		return ErrOwnerShareDisabled
+	}
+
 	// Check source file status
 	file, err := share.Edges.FileOrErr()
 	if err != nil || file.FileChildren == 0 || file.OwnerID != owner.ID {
@@ -418,7 +428,8 @@ func withShareEagerLoading(ctx context.Context, q *ent.ShareQuery) *ent.ShareQue
 	}
 	if v, ok := ctx.Value(LoadShareUser{}).(bool); ok && v {
 		q.WithUser(func(q *ent.UserQuery) {
-			withUserEagerLoading(ctx, q)
+			userCtx := context.WithValue(ctx, LoadUserGroup{}, true)
+			withUserEagerLoading(userCtx, q)
 		})
 	}
 
